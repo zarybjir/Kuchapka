@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kuchapka</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#3A6EA5">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="app">
+
+  <div id="app-header">
+    <div class="header-row">
+      <div class="brand">
+        <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M14.5 17 c -1.9 -2.8 1.9 -4.6 0 -7.6" stroke-width="2"/>
+          <path d="M21 15.4 c -1.9 -2.8 1.9 -4.6 0 -7.6" stroke-width="2"/>
+          <path d="M33 7 L27 20" stroke-width="2.9"/>
+          <path d="M3.5 20 H44.5" stroke-width="2.9"/>
+          <path d="M8.5 20 v13.5 a7 7 0 0 0 7 7 h17 a7 7 0 0 0 7 -7 V20" stroke-width="2.9"/>
+        </svg>
+        <h1>Kuchapka</h1>
+      </div>
+      <div class="tabs">
+        <button class="tab active" data-view="list" onclick="showList()">Recepty</button>
+        <button class="tab" data-view="shop" onclick="showShop()">Nákup</button>
+        <button class="tab" data-view="stats" onclick="showStats()">Statistiky</button>
+      </div>
+      <button id="theme-toggle" class="theme-toggle" onclick="toggleTheme()" aria-label="Přepnout tmavý režim"></button>
+    </div>
+    <div class="header-rule"></div>
+  </div>
+
+  <div id="view-list">
+    <div class="search-wrap">
+      <input id="search-input" type="search" placeholder="Hledat podle názvu…" oninput="onSearchInput()">
+      <button class="search-clear hidden" id="search-clear" onclick="clearSearch()" aria-label="Vymazat hledání">&times;</button>
+    </div>
+    <button class="filter-toggle" id="filter-toggle" onclick="toggleFilterBar()">
+      <span class="caret">&#9660;</span><span id="filter-toggle-label">Kategorie</span>
+    </button>
+    <div class="cat-filter" id="cat-filter"></div>
+    <div id="recipe-list"></div>
+    <div class="backup-row">
+      <button class="backup-btn" onclick="exportRecipes()">Zálohovat do souboru</button>
+      <button class="backup-btn" onclick="document.getElementById('restore-input').click()">Obnovit ze zálohy</button>
+    </div>
+    <div class="backup-hint" id="backup-hint">Zálohu si ulož před nahráním nové verze appky.</div>
+    <button class="install-btn hidden" id="install-btn" onclick="doInstall()">Nainstalovat aplikaci</button>
+    <div class="diag" id="diag"></div>
+    <div class="backup-hint" style="margin-top:4px;opacity:.6;">build 21 &middot; 5. 11. 2026</div>
+    <input type="file" id="restore-input" accept="application/json,.json" class="hidden" onchange="importRecipes(event)">
+  </div>
+
+  <div id="view-shop" class="hidden"></div>
+
+  <div id="view-stats" class="hidden"></div>
+
+  <div id="view-cook" class="hidden"></div>
+
+  <div id="view-detail" class="hidden"></div>
+
+  <div id="view-add" class="hidden">
+    <button class="back-link" onclick="cancelAdd()">‹ Zpět</button>
+    <h2 id="add-heading" style="margin-bottom:16px;font-size:20px;">Nový recept</h2>
+
+    <div class="field">
+      <button type="button" class="secondary-btn" onclick="toggleImportBox()">Chytře vložit text</button>
+      <div id="import-box" class="hidden" style="margin-top:10px;">
+        <textarea id="f-import" placeholder="Vlož sem text (např. popisek videa nebo recept z webu) a klepni na Zpracovat."></textarea>
+        <div class="hint">Zkusím z toho automaticky poskládat ingredience a postup níž. Zkontroluj výsledek, než uložíš.</div>
+        <button type="button" class="save-btn" style="margin-top:8px;" onclick="runSmartImport()">Zpracovat text</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="f-title">Název</label>
+      <input id="f-title" type="text" placeholder="např. Dhal z červené čočky">
+    </div>
+
+    <div class="field">
+      <label for="f-desc">Krátký popis</label>
+      <input id="f-desc" type="text" placeholder="jedna věta o receptu">
+    </div>
+
+    <div class="field">
+      <label for="f-category">Kategorie</label>
+      <input id="f-category" type="text" list="category-list" placeholder="např. Indická kuchyně, Snídaně, Bez masa…">
+      <datalist id="category-list"></datalist>
+    </div>
+
+    <div class="field">
+      <label for="f-servings">Počet porcí (základ)</label>
+      <input id="f-servings" type="number" min="1" value="4">
+    </div>
+
+    <div class="field">
+      <label for="f-ingredients">Ingredience</label>
+      <textarea id="f-ingredients" placeholder="## Marináda
+2 lžíce citronová šťáva
+150 g kuřecí prsa
+
+## Omáčka
+1 ks cibule"></textarea>
+      <div class="hint">Řádek začínající „## " je nadpis skupiny. Ostatní řádky ve formátu „množství jednotka název".</div>
+    </div>
+
+    <div class="field">
+      <label for="f-steps">Postup</label>
+      <textarea id="f-steps" placeholder="Orestujte cibuli: Cibuli osmahněte dozlatova.
+Přidejte koření: Vmíchejte koření a chvíli restujte."></textarea>
+      <div class="hint">Jeden krok na řádek. Volitelně „Titulek: text kroku".</div>
+    </div>
+
+    <div class="field">
+      <label for="f-notes">Poznámka</label>
+      <textarea id="f-notes" style="min-height:70px;" placeholder="volitelné – co si chceš k receptu zapamatovat"></textarea>
+    </div>
+
+    <button class="save-btn" onclick="saveNewRecipe()">Uložit recept</button>
+    <div id="add-status" class="status-msg"></div>
+  </div>
+
+</div>
+
+<button id="back-fab" class="hidden" onclick="showList()" aria-label="Zpět na seznam">‹</button>
+
+<button id="add-fab" class="hidden" onclick="showAdd()" aria-label="Přidat recept">+</button>
+
+<div id="timer-bar" class="hidden">
+  <span class="t-count" id="t-count">00:00</span>
+  <span class="t-label" id="t-label"></span>
+  <button onclick="stopTimer()">Zrušit</button>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
