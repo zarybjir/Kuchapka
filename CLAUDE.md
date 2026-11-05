@@ -21,7 +21,11 @@ Data jen lokálně v prohlížeči, žádný účet, žádný server, žádné s
 - **Skloňování** přes `plural(n, one, few, many)`. Nikdy natvrdo „4 porce“.
 - **Build číslo** je v patičce `index.html` (`build N`). Po každé změně ho zvedni —
   slouží k ověření, že na telefonu běží nová verze.
-- **Úložiště** je `localStorage`, klíče `kucharka_*`. Nikdy nepřidávej cloud ani účty.
+- **Úložiště** je `localStorage`, klíče `kucharka_*`. Nepřidávej cloud ani účty.
+  Jediná výjimka: položky nákupu z hodin (Panel) chodí přes ntfy.sh — schránka
+  s náhodným názvem z kódu na hodinách, potvrzení převzetí do `<schránka>-ack`.
+- **Android aplikace** se staví v repozitáři Stihnu-to (modul `kuchapka`) z těchto
+  souborů; v ní je `window.KuchapkaAndroid` (sdílení, záloha, displej, schránka hodin).
 - **Service worker musí zůstat network first.** Cache-first verze způsobila, že se
   nová nasazení neprojevila.
 - **Nové soubory přidej do `ASSETS` v `sw.js`** i do `FILES` v `build.sh`.

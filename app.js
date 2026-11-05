@@ -237,6 +237,7 @@ function toggleTheme(){
 
 /* ---------- wake lock (keep screen on while a recipe is open) ---------- */
 async function updateWakeLock(active){
+  if(window.KuchapkaAndroid){ try{ window.KuchapkaAndroid.keepScreenOn(!!active); }catch(e){} return; }
   try{
     if(active){
       if('wakeLock' in navigator){
@@ -903,6 +904,15 @@ async function saveNewRecipe(){
 
 /* ---------- backup / restore ---------- */
 function exportRecipes(){
+  if(window.KuchapkaAndroid){
+    const d = new Date();
+    const stamp = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+    try{
+      const where = window.KuchapkaAndroid.saveBackup('kucharka-zaloha-'+stamp+'.json', JSON.stringify(recipes, null, 2));
+      setBackupHint(where ? 'Záloha uložena do ' + where + '.' : 'Zálohu se nepodařilo uložit.');
+    }catch(e){ setBackupHint('Zálohu se nepodařilo uložit.'); }
+    return;
+  }
   try{
     const blob = new Blob([JSON.stringify(recipes, null, 2)], {type:'application/json'});
     const url = URL.createObjectURL(blob);
@@ -1168,6 +1178,7 @@ function shoppingAsText(){
 async function shareShopping(){
   const text = shoppingAsText();
   if(!text){ return; }
+  if(window.KuchapkaAndroid){ try{ window.KuchapkaAndroid.share(text); return; }catch(e){} }
   if(navigator.share){
     try{
       await navigator.share({title:'N\u00e1kupn\u00ed seznam', text});
@@ -1316,7 +1327,13 @@ function addCustomShopItem(){
   if(!input) return;
   const raw = input.value.trim();
   if(!raw) return;
+  addShopText(raw, 'Vlastn\u00ed');
+  input.value = '';
+  renderShop();
+}
 
+// Přidá položku zadanou textem („2 l mléko“, „mléko“) — ručně nebo z hodin.
+function addShopText(raw, title){
   // "2 l mléko" rozdělíme na množství, jednotku a název; "mléko" projde jako holá položka
   let amount = null, unit = '', name = raw;
   const m = raw.match(/^([\d]+(?:[.,][\d]+)?)\s*(\S+)?\s+(.+)$/);
@@ -1333,11 +1350,108 @@ function addCustomShopItem(){
     found = {key, name, unit, done:false, parts:[]};
     list.push(found);
   }
-  found.parts.push({id:'vlastni-' + Date.now(), title:'Vlastn\u00ed', amount});
+  found.parts.push({id:'vlastni-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6), title, amount});
   saveShopping(list);
-  input.value = '';
+}
+
+/* ---------- propojení s hodinami (Panel na Lenovo Smart Clock) ----------
+   Hodiny posílají položky přes ntfy.sh do schránky s náhodným názvem
+   (kód z hodin). Kuchapka si je vyzvedne a potvrdí převzetí do schránky
+   „…-ack“, hodiny pak přestanou položku posílat znovu. */
+const HODINY_KEY = 'kucharka_hodiny';
+
+function hodinyTopic(){
+  try{ return localStorage.getItem(HODINY_KEY) || ''; }catch(e){ return ''; }
+}
+function hodinyList(key){
+  try{ const a = JSON.parse(localStorage.getItem(key) || '[]'); return Array.isArray(a) ? a : []; }catch(e){ return []; }
+}
+function hodinyNative(topic){
+  try{ if(window.KuchapkaAndroid) window.KuchapkaAndroid.setTopic(topic || ''); }catch(e){}
+}
+
+function pairHodiny(){
+  const code = prompt('Opi\u0161 k\u00f3d z hodin (okno Aplikace \u2192 N\u00e1kup do Kuchapky):');
+  if(code == null) return;
+  const c = code.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if(c.length < 8){ alert('K\u00f3d nevypad\u00e1 spr\u00e1vn\u011b \u2014 m\u00e1 12 znak\u016f, nap\u0159. K7F3-9Q2X-M4PA.'); return; }
+  try{ localStorage.setItem(HODINY_KEY, 'kuchapka-' + c.toLowerCase()); }catch(e){}
+  hodinyNative(hodinyTopic());
+  renderShop();
+  pollHodiny();
+}
+
+function unpairHodiny(){
+  if(!confirm('Odpojit hodiny? Polo\u017eky z nich u\u017e nebudou chodit.')) return;
+  try{ localStorage.removeItem(HODINY_KEY); }catch(e){}
+  hodinyNative('');
   renderShop();
 }
+
+let hodinyBusy = false;
+async function pollHodiny(){
+  const topic = hodinyTopic();
+  if(!topic || hodinyBusy || !navigator.onLine) return;
+  hodinyBusy = true;
+  try{
+    const res = await fetch('https://ntfy.sh/' + topic + '/json?poll=1&since=all', {cache:'no-store'});
+    if(!res.ok) return;
+    const seen = hodinyList('kucharka_hodiny_seen');
+    const acked = hodinyList('kucharka_hodiny_acked');
+    const added = [], toAck = [];
+    (await res.text()).split('\n').forEach(line => {
+      if(!line.trim()) return;
+      let ev, m;
+      try{ ev = JSON.parse(line); }catch(e){ return; }
+      if(ev.event !== 'message') return;
+      try{ m = JSON.parse(ev.message); }catch(e){ return; }
+      if(!m || !m.id || !m.text) return;
+      if(!seen.includes(m.id)){ seen.push(m.id); added.push(String(m.text)); }
+      if(!acked.includes(m.id) && !toAck.includes(m.id)) toAck.push(m.id);
+    });
+    added.forEach(t => addShopText(t, 'Z hodin'));
+    try{ localStorage.setItem('kucharka_hodiny_seen', JSON.stringify(seen.slice(-500))); }catch(e){}
+    if(toAck.length){
+      const r = await fetch('https://ntfy.sh/' + topic + '-ack', {method:'POST', body: JSON.stringify({ack: toAck})});
+      if(r.ok){
+        try{ localStorage.setItem('kucharka_hodiny_acked', JSON.stringify(acked.concat(toAck).slice(-500))); }catch(e){}
+      }
+    }
+    if(added.length){
+      const shop = document.getElementById('view-shop');
+      if(shop && !shop.classList.contains('hidden')) renderShop();
+      hodinyToast('Z hodin: ' + added.join(', '));
+    }
+  }catch(e){
+    // bez internetu to zkusíme příště
+  }finally{
+    hodinyBusy = false;
+  }
+}
+
+function hodinyToast(msg){
+  let el = document.getElementById('hodiny-toast');
+  if(!el){
+    el = document.createElement('div');
+    el.id = 'hodiny-toast';
+    el.className = 'hodiny-toast';
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('show'), 5000);
+}
+
+function hodinyBox(){
+  return hodinyTopic()
+    ? '<div class="hodiny-row">Propojeno s hodinami \u2014 polo\u017eky \u0159e\u010den\u00e9 hodin\u00e1m se objev\u00ed tady. <button class="amt-reset" onclick="unpairHodiny()">odpojit</button></div>'
+    : '<div class="hodiny-row"><button class="backup-btn" onclick="pairHodiny()">Propojit s hodinami</button></div>';
+}
+
+document.addEventListener('visibilitychange', () => { if(!document.hidden) pollHodiny(); });
+window.addEventListener('online', () => pollHodiny());
+setInterval(() => { if(!document.hidden) pollHodiny(); }, 60000);
 
 function deleteShopItem(key){
   saveShopping(loadShopping().filter(x => x.key !== key));
@@ -1372,7 +1486,7 @@ function renderShop(){
     </div>`;
 
   if(list.length === 0){
-    el.innerHTML = '<div class="empty-state">Seznam je pr\u00e1zdn\u00fd. V receptu ozna\u010d suroviny, kter\u00e9 pot\u0159ebuje\u0161 koupit, nebo si polo\u017eku p\u0159idej r\u016f\u010dn\u011b n\u00ed\u017ee.</div>' + addBox;
+    el.innerHTML = '<div class="empty-state">Seznam je pr\u00e1zdn\u00fd. V receptu ozna\u010d suroviny, kter\u00e9 pot\u0159ebuje\u0161 koupit, nebo si polo\u017eku p\u0159idej r\u016f\u010dn\u011b n\u00ed\u017ee.</div>' + addBox + hodinyBox();
     bindShopAdd(el);
     return;
   }
@@ -1416,6 +1530,7 @@ function renderShop(){
     </div>
     ${body}
     ${addBox}
+    ${hodinyBox()}
     <button class="share-btn" onclick="shareShopping()">Sd\u00edlet seznam</button>
     <div class="shop-actions">
       <button onclick="clearShoppingDone()">Smazat koupen\u00e9</button>
@@ -1573,5 +1688,7 @@ function escapeHtml(str){
 
   recipes = loaded;
   renderList();
+  hodinyNative(hodinyTopic());
+  pollHodiny();
   setTimeout(updateDiag, 2500);
 })();

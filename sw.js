@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kuchapka-v3';
+const CACHE_NAME = 'kuchapka-v4';
 const ASSETS = [
   './index.html',
   './styles.css',
@@ -27,6 +27,8 @@ self.addEventListener('activate', (e) => {
 // Cache-first by znamenala, že se nová verze po nasazení nikdy neprojeví.
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
+  // cizí adresy (ntfy.sh — položky z hodin) jdou vždy rovnou na síť, nekešují se
+  if (new URL(e.request.url).origin !== self.location.origin) return;
   e.respondWith(
     fetch(e.request)
       .then((response) => {
