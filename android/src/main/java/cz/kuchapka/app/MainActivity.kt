@@ -21,6 +21,9 @@ import java.net.URL
 class MainActivity : Activity() {
     private lateinit var web: WebView
     private var fileCallback: ValueCallback<Array<Uri>>? = null
+    /** Text nasdílený z jiné aplikace (odkaz na recept), který web ještě nepřevzal. */
+    private var pendingShare: String? = null
+    private var pageReady = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -52,6 +55,11 @@ class MainActivity : Activity() {
                 }
             }
 
+            override fun onPageFinished(view: WebView, url: String?) {
+                pageReady = true
+                deliverShare()
+            }
+
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 if (request.url.host == HOST) return false
                 try { startActivity(Intent(Intent.ACTION_VIEW, request.url)) } catch (e: ActivityNotFoundException) {}
@@ -69,7 +77,47 @@ class MainActivity : Activity() {
         }
         if (savedInstanceState == null) web.loadUrl(START) else web.restoreState(savedInstanceState)
 
+        // Android 13+ hlásí Zpět tudy (starší přes onBackPressed níž)
+        if (Build.VERSION.SDK_INT >= 33) {
+            onBackInvokedDispatcher.registerOnBackInvokedCallback(
+                android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT
+            ) { handleBack() }
+        }
+        if (savedInstanceState == null) takeShare(intent)
         checkUpdate()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        takeShare(intent)
+    }
+
+    /** „Sdílet → Kuchapka“: odkaz nebo text receptu předat webu k importu. */
+    private fun takeShare(intent: Intent?) {
+        if (intent?.action != Intent.ACTION_SEND || intent.type?.startsWith("text/") != true) return
+        val text = intent.getStringExtra(Intent.EXTRA_TEXT)?.trim().orEmpty()
+        if (text.isEmpty()) return
+        pendingShare = text.take(100_000)
+        deliverShare()
+    }
+
+    private fun deliverShare() {
+        val text = pendingShare ?: return
+        if (!pageReady) return
+        pendingShare = null
+        // jako JSON řetězec — text z cizí aplikace se nesmí dostat do skriptu jinak než jako data
+        val arg = org.json.JSONObject.quote(text)
+        web.evaluateJavascript("typeof kuchapkaShared==='function'&&kuchapkaShared($arg)", null)
+    }
+
+    /**
+     * Zpět jde v aplikaci o úroveň výš (vaření → recept → seznam); o tom rozhoduje web.
+     * Až na seznamu receptů aplikace ustoupí do pozadí — neukončí se, takže se příště otevře hned.
+     */
+    private fun handleBack() {
+        web.evaluateJavascript("typeof kuchapkaBack==='function'&&kuchapkaBack()") { handled ->
+            if (handled != "true") moveTaskToBack(true)
+        }
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -100,10 +148,7 @@ class MainActivity : Activity() {
     }
 
     @Deprecated("Deprecated in Java")
-    override fun onBackPressed() {
-        // web si vede historii (recept → seznam), zpět jde po ní
-        if (web.canGoBack()) web.goBack() else finish()
-    }
+    override fun onBackPressed() = handleBack()
 
     fun keepScreenOn(on: Boolean) = runOnUiThread {
         if (on) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)

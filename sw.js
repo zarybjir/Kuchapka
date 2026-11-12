@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kuchapka-v4';
+const CACHE_NAME = 'kuchapka-v5';
 const ASSETS = [
   './index.html',
   './styles.css',

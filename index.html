@@ -52,7 +52,7 @@
     <div class="backup-hint" id="backup-hint">Zálohu si ulož před nahráním nové verze appky.</div>
     <button class="install-btn hidden" id="install-btn" onclick="doInstall()">Nainstalovat aplikaci</button>
     <div class="diag" id="diag"></div>
-    <div class="backup-hint" style="margin-top:4px;opacity:.6;">build 22 &middot; 5. 11. 2026</div>
+    <div class="backup-hint" style="margin-top:4px;opacity:.6;">build 23 &middot; 12. 11. 2026</div>
     <input type="file" id="restore-input" accept="application/json,.json" class="hidden" onchange="importRecipes(event)">
   </div>
 
@@ -69,11 +69,19 @@
     <h2 id="add-heading" style="margin-bottom:16px;font-size:20px;">Nový recept</h2>
 
     <div class="field">
-      <button type="button" class="secondary-btn" onclick="toggleImportBox()">Chytře vložit text</button>
+      <button type="button" class="secondary-btn" onclick="toggleImportBox()">Importovat recept (odkaz nebo text)</button>
       <div id="import-box" class="hidden" style="margin-top:10px;">
-        <textarea id="f-import" placeholder="Vlož sem text (např. popisek videa nebo recept z webu) a klepni na Zpracovat."></textarea>
-        <div class="hint">Zkusím z toho automaticky poskládat ingredience a postup níž. Zkontroluj výsledek, než uložíš.</div>
-        <button type="button" class="save-btn" style="margin-top:8px;" onclick="runSmartImport()">Zpracovat text</button>
+        <textarea id="f-import" placeholder="Vlož odkaz na stránku s receptem, nebo zkopírovaný text (např. popisek videa)."></textarea>
+        <div class="hint">Claude z toho vytáhne jen recept, převede ho do češtiny, gramů a lžic a seřadí postup: nejdřív příprava, pak vaření. Výsledek zkontroluj, než uložíš.</div>
+        <button type="button" class="save-btn hidden" id="import-ai-btn" style="margin-top:8px;" onclick="runClaudeImport()">Načíst recept přes Claude</button>
+        <button type="button" class="secondary-btn" style="margin-top:8px;" onclick="runSmartImport()">Rozebrat vložený text bez Clauda</button>
+        <div id="import-status" class="status-msg"></div>
+        <label for="f-claude-key" style="margin-top:14px;">Klíč ke Claude API (jen pro Kuchapku)</label>
+        <input id="f-claude-key" type="password" autocomplete="off" placeholder="sk-ant-…">
+        <div class="hint" id="claude-key-state"></div>
+        <div class="hint">Klíč vytvoříš na platform.claude.com → API Keys; jeden recept stojí zhruba pár korun. Doporučuju samostatný klíč s měsíčním limitem.</div>
+        <button type="button" class="secondary-btn" style="margin-top:8px;" onclick="saveClaudeKey()">Uložit klíč</button>
+        <button type="button" class="secondary-btn hidden" id="claude-key-forget" style="margin-top:8px;" onclick="forgetClaudeKey()">Smazat klíč z tohoto zařízení</button>
       </div>
     </div>
 
@@ -114,6 +122,7 @@
       <textarea id="f-steps" placeholder="Orestujte cibuli: Cibuli osmahněte dozlatova.
 Přidejte koření: Vmíchejte koření a chvíli restujte."></textarea>
       <div class="hint">Jeden krok na řádek. Volitelně „Titulek: text kroku".</div>
+      <button type="button" class="secondary-btn hidden" id="reorder-btn" style="margin-top:8px;" onclick="runClaudeReorder()">Uspořádat postup přes Claude (nejdřív příprava)</button>
     </div>
 
     <div class="field">

@@ -25,8 +25,13 @@ Data jen lokálně v prohlížeči, žádný účet, žádný server, žádné s
 - **Úložiště** je `localStorage`, klíče `kucharka_*`. Nepřidávej cloud ani účty.
   Jediná výjimka: položky nákupu z hodin (Panel) chodí přes ntfy.sh — schránka
   s náhodným názvem z kódu na hodinách, potvrzení převzetí do `<schránka>-ack`.
+- **Import přes Claude** (odkaz nebo text → recept, „Uspořádat postup“) volá přímo
+  `api.anthropic.com` klíčem, který si uživatel vloží do Kuchapky (`kucharka_claude_key`,
+  jen v zařízení, nikdy do zálohy). Je to druhá a poslední výjimka z „žádný cloud“.
+  Bez klíče musí appka fungovat celá, jen s jednoduchým rozebráním textu.
 - **Android aplikace** je ve složce `android/` tohoto repozitáře a balí přímo tyhle
-  soubory webu; v ní je `window.KuchapkaAndroid` (sdílení, záloha, displej, schránka hodin).
+  soubory webu; v ní je `window.KuchapkaAndroid` (sdílení, záloha, displej, schránka hodin);
+  aplikace naopak volá `kuchapkaBack()` (tlačítko Zpět) a `kuchapkaShared(text)` (Sdílet → Kuchapka).
   GitHub Actions ji po každé změně webu nebo `android/` sestaví a vydá jako
   `releases/download/kuchapka-latest/kuchapka.apk`. Do Netlify ZIPu se nedává.
 - **Service worker musí zůstat network first.** Cache-first verze způsobila, že se
