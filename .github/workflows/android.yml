@@ -1,20 +1,23 @@
-# Sestaví Android aplikaci Kuchapka (web ze zarybjir/Kuchapka zabalený do aplikace).
-# Ke stažení: https://github.com/<repo>/releases/download/kuchapka-latest/kuchapka.apk
-name: Build Kuchapka APK
+# Sestaví Android aplikaci Kuchapka (tenhle web zabalený do aplikace) a vydá ji na stálé adrese:
+# https://github.com/zarybjir/Kuchapka/releases/download/kuchapka-latest/kuchapka.apk
+name: Build Android APK
 
 on:
   push:
+    branches: [main, ccr-63ee96b3-7bf2sa]
     paths:
-      - "kuchapka/**"
-      - ".github/workflows/kuchapka.yml"
+      - "android/**"
+      - "index.html"
+      - "styles.css"
+      - "app.js"
+      - "manifest.json"
+      - "icon-192.png"
+      - "icon-512.png"
+      - ".github/workflows/android.yml"
   workflow_dispatch:
-    inputs:
-      ref:
-        description: "Větev Kuchapky (prázdné = ccr-63ee96b3-7bf2sa, jinak main)"
-        required: false
 
 concurrency:
-  group: kuchapka-build
+  group: android-build
   cancel-in-progress: true
 
 permissions:
@@ -23,18 +26,11 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android
     steps:
       - uses: actions/checkout@v4
-
-      - name: Kuchapka web
-        run: |
-          ref="${{ github.event.inputs.ref }}"
-          if [ -z "$ref" ]; then
-            if git ls-remote --exit-code --heads https://github.com/zarybjir/Kuchapka ccr-63ee96b3-7bf2sa >/dev/null; then ref=ccr-63ee96b3-7bf2sa; else ref=main; fi
-          fi
-          git clone --depth 1 --branch "$ref" https://github.com/zarybjir/Kuchapka "$RUNNER_TEMP/kuchapka"
-          echo "KUCHAPKA_SRC=$RUNNER_TEMP/kuchapka" >> "$GITHUB_ENV"
-          echo "Kuchapka: $ref $(git -C "$RUNNER_TEMP/kuchapka" rev-parse --short HEAD) ($(grep -o 'build [0-9]*' "$RUNNER_TEMP/kuchapka/index.html" | head -1))"
 
       - uses: actions/setup-java@v4
         with:
@@ -46,8 +42,13 @@ jobs:
       - name: Keystore
         env:
           KS_B64: ${{ secrets.PANEL_KEYSTORE_B64 }}
-        if: env.KS_B64 != ''
         run: |
+          # Bez stálého klíče by se APK podepsala náhodným klíčem a přes nainstalovanou
+          # verzi by nešla nainstalovat — radši nevydat nic.
+          if [ -z "$KS_B64" ]; then
+            echo "::error title=Chybí podpisový klíč::Přidej secrets PANEL_KEYSTORE_B64 a PANEL_KEYSTORE_PASSWORD (Settings → Secrets and variables → Actions)."
+            exit 1
+          fi
           echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/panel.keystore"
           echo "PANEL_KEYSTORE=$RUNNER_TEMP/panel.keystore" >> "$GITHUB_ENV"
 
@@ -55,9 +56,10 @@ jobs:
         env:
           PANEL_KEYSTORE_PASSWORD: ${{ secrets.PANEL_KEYSTORE_PASSWORD }}
         run: |
+          echo "Web: $(grep -o 'build [0-9]*' ../index.html | head -1)"
           chmod +x gradlew
           set +e
-          ./gradlew --no-daemon --console=plain :kuchapka:assembleDebug > build.log 2>&1
+          ./gradlew --no-daemon --console=plain assembleDebug > build.log 2>&1
           rc=$?
           set -e
           cat build.log
@@ -69,13 +71,14 @@ jobs:
 
       - name: Publish
         run: |
+          # Starší sestavení, které doběhlo později, nesmí přepsat novější verzi.
           head=$(git ls-remote origin "refs/heads/${GITHUB_REF_NAME}" | cut -f1)
           if [ -n "$head" ] && [ "$head" != "$GITHUB_SHA" ]; then
             echo "Na větvi je novější commit ($head), vydání přeskakuji."
             exit 0
           fi
-          cp kuchapka/build/outputs/apk/debug/kuchapka-debug.apk kuchapka.apk
-          code=$(grep -o 'versionCode = [0-9]*' kuchapka/build.gradle.kts | grep -o '[0-9]*')
+          cp build/outputs/apk/debug/kuchapka-debug.apk kuchapka.apk
+          code=$(grep -o 'versionCode = [0-9]*' build.gradle.kts | grep -o '[0-9]*')
           echo "versionCode=$code" > version.txt
           gh release list --limit 50 --json tagName,name \
             --jq '.[] | select(.name | startswith("Kuchapka")) | .tagName' |

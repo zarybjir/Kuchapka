@@ -1,11 +1,10 @@
 plugins {
-    id("com.android.application")
-    id("org.jetbrains.kotlin.android")
+    id("com.android.application") version "8.7.3"
+    id("org.jetbrains.kotlin.android") version "2.0.21"
 }
 
-// Webová Kuchapka (repozitář zarybjir/Kuchapka) se při sestavení zkopíruje do aplikace.
-// Cesta ke klonu: proměnná KUCHAPKA_SRC, jinak ../../kuchapka vedle tohoto repozitáře.
-val kuchapkaSrc = System.getenv("KUCHAPKA_SRC") ?: rootProject.file("../kuchapka").path
+// Webová Kuchapka (o složku výš, v tomtéž repozitáři) se při sestavení zkopíruje do aplikace.
+val kuchapkaSrc = System.getenv("KUCHAPKA_SRC") ?: rootProject.file("..").path
 val webOut = layout.buildDirectory.dir("kuchapka-web")
 val iconOut = layout.buildDirectory.dir("kuchapka-icon")
 
@@ -29,8 +28,8 @@ android {
         applicationId = "cz.kuchapka.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 2
-        versionName = "1.1"
+        versionCode = 3
+        versionName = "1.2"
     }
 
     // Stejný stálý klíč jako panel (GitHub secret PANEL_KEYSTORE_B64), aby šly aktualizace.
