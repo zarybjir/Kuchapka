@@ -14,6 +14,7 @@ Data jen lokálně v prohlížeči, žádný účet, žádný server, žádné s
 | `manifest.json` | PWA manifest |
 | `_headers` | Netlify: Content-Type pro manifest a sw.js |
 | `build.sh` | zabalí `kuchapka.zip` pro Netlify |
+| `android/` | Android aplikace (WebView s tímto webem), samostatný Gradle projekt |
 
 ## Pravidla, která drž
 
@@ -24,8 +25,10 @@ Data jen lokálně v prohlížeči, žádný účet, žádný server, žádné s
 - **Úložiště** je `localStorage`, klíče `kucharka_*`. Nepřidávej cloud ani účty.
   Jediná výjimka: položky nákupu z hodin (Panel) chodí přes ntfy.sh — schránka
   s náhodným názvem z kódu na hodinách, potvrzení převzetí do `<schránka>-ack`.
-- **Android aplikace** se staví v repozitáři Stihnu-to (modul `kuchapka`) z těchto
-  souborů; v ní je `window.KuchapkaAndroid` (sdílení, záloha, displej, schránka hodin).
+- **Android aplikace** je ve složce `android/` tohoto repozitáře a balí přímo tyhle
+  soubory webu; v ní je `window.KuchapkaAndroid` (sdílení, záloha, displej, schránka hodin).
+  GitHub Actions ji po každé změně webu nebo `android/` sestaví a vydá jako
+  `releases/download/kuchapka-latest/kuchapka.apk`. Do Netlify ZIPu se nedává.
 - **Service worker musí zůstat network first.** Cache-first verze způsobila, že se
   nová nasazení neprojevila.
 - **Nové soubory přidej do `ASSETS` v `sw.js`** i do `FILES` v `build.sh`.
