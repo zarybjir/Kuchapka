@@ -631,6 +631,7 @@ function kuchapkaBack(){
     if(!box.classList.contains('hidden')){ box.classList.add('hidden'); return true; }
     cancelAdd(); return true;
   }
+  if(currentView === 'shop' && shopPasteOpen){ shopPasteOpen = false; renderShop(); return true; }
   if(currentView === 'detail' || currentView === 'shop' || currentView === 'stats'){ showList(); return true; }
   if(searchQuery){ clearSearch(); return true; }
   return false;
@@ -1635,16 +1636,65 @@ function addCustomShopItem(){
   renderShop();
 }
 
+// Jednotky, které se u nákupu berou jako jednotka (cokoli jiného za číslem je už název: „2 cibule“).
+const SHOP_UNITS = 'kg|dkg|dag|g|ml|dl|cl|l|ks|kus[ůy]?|bal(?:ení|íky?|íček)?|lžíce|lžic|lžičk[ay]|lžiček|plechovk[ayu]|plechovek|' +
+  'sklenic[eí]?|lahve|láhev|lahví|svaz(?:ek|ky|ků)|stroužk[yůu]|stroužek|plátk[yůu]|plátek|sáčk[yůu]|sáček|krabic[eí]?|kelímk[yůu]|kelímek|' +
+  'hrst(?:i|í)?|špetk[ayu]|pytlík[yů]?|tuby?|tub|konzerv[ay]?';
+
+/**
+ * Blok textu (zpráva, poznámky, seznam z jiné appky) → jednotlivé položky nákupu.
+ * Řádky i čárkami oddělené položky; odrážky, zaškrtávátka a číslování se zahodí.
+ */
+function parseShopBlock(text){
+  const out = [];
+  String(text || '').split(/\r?\n|;/).forEach(line => {
+    line = line.trim();
+    if(!line) return;
+    // čárky dělí položky, ale ne desetinnou čárku („1,5 kg“)
+    line.split(/,(?!\d)/).forEach(part => {
+      let t = part.trim()
+        .replace(/^(?:[-–—•*·▪◦‣]+|\[[ xX✓]?\]|[☐☑✓✔])\s*/, '')   // odrážky a zaškrtávátka
+        .replace(/^\d{1,2}[.)]\s+/, '')                            // číslování „1. “ (ne „1.5 kg“ — tam není mezera)
+        .replace(/\s+/g, ' ').trim();
+      if(!t || /:$/.test(t) || /^https?:\/\//i.test(t)) return;   // nadpisy („Nákup:“) a odkazy
+      if(t.length > 80) t = t.slice(0, 80);
+      out.push(t);
+    });
+  });
+  return out;
+}
+
+let shopPasteOpen = false;
+function toggleShopPaste(){ shopPasteOpen = !shopPasteOpen; renderShop(); }
+function addShopBlock(){
+  const el = document.getElementById('shop-paste');
+  if(!el) return;
+  const items = parseShopBlock(el.value);
+  if(!items.length){ hodinyToast('V textu jsem nenašel žádnou položku.'); return; }
+  items.forEach(t => addShopText(t, 'Vložené'));
+  shopPasteOpen = false;
+  renderShop();
+  hodinyToast('Přidáno: ' + items.length + ' ' + plural(items.length, 'položka', 'položky', 'položek') + '.');
+}
+
 // Přidá položku zadanou textem („2 l mléko“, „mléko“) — ručně nebo z hodin.
 function addShopText(raw, title){
   // "2 l mléko" rozdělíme na množství, jednotku a název; "mléko" projde jako holá položka
   let amount = null, unit = '', name = raw;
-  const m = raw.match(/^([\d]+(?:[.,][\d]+)?)\s*(\S+)?\s+(.+)$/);
-  if(m){
-    amount = parseFloat(m[1].replace(',', '.'));
-    unit = m[2] || '';
-    name = m[3];
+  const num = '(\\d+(?:[.,]\\d+)?)';
+  let m;
+  if((m = raw.match(new RegExp('^' + num + '\\s*(?:x|×|krát)\\s+(.+)$', 'i')))){           // „2x rohlík“
+    amount = m[1]; unit = 'ks'; name = m[2];
+  } else if((m = raw.match(new RegExp('^' + num + '\\s*(' + SHOP_UNITS + ')\\.?\\s+(.+)$', 'i')))){ // „2 l mléko“, „500g mouka“
+    amount = m[1]; unit = m[2]; name = m[3];
+  } else if((m = raw.match(new RegExp('^' + num + '\\s+(.+)$')))){                         // „2 cibule“
+    amount = m[1]; name = m[2];
+  } else if((m = raw.match(new RegExp('^(.+?)[\\s,:–-]+' + num + '\\s*(' + SHOP_UNITS + '|x|×)?\\.?$', 'i')))){ // „mléko 2 l“, „rohlíky 10x“
+    name = m[1]; amount = m[2]; unit = (m[3] && !/^[x×]$/i.test(m[3])) ? m[3] : (m[3] ? 'ks' : '');
   }
+  if(amount !== null) amount = parseFloat(String(amount).replace(',', '.'));
+  name = name.trim();
+  if(!name) return;
 
   const list = loadShopping();
   const key = name.trim().toLowerCase() + '|' + unit.trim().toLowerCase();
@@ -1786,7 +1836,15 @@ function renderShop(){
     <div class="shop-add">
       <input id="shop-new" type="text" placeholder="Vlastn\u00ed polo\u017eka, nap\u0159. 2 l ml\u00e9ko">
       <button onclick="addCustomShopItem()" aria-label="P\u0159idat polo\u017eku">+</button>
-    </div>`;
+    </div>
+    <button class="secondary-btn" style="margin-top:8px;" onclick="toggleShopPaste()">${shopPasteOpen ? 'Zavřít vkládání' : 'Vložit seznam z textu'}</button>
+    ${shopPasteOpen ? `
+      <textarea id="shop-paste" style="margin-top:8px;min-height:120px;" placeholder="Vlož seznam – každá položka na řádek nebo oddělená čárkou:
+2 l mléko
+rohlíky 10x
+máslo, vejce, 500 g mouka"></textarea>
+      <button class="save-btn" style="margin-top:8px;" onclick="addShopBlock()">Přidat do nákupu</button>
+      <div class="backup-hint" style="text-align:left;">Položky se samy zařadí do regálů. Stejné se sloučí.</div>` : ''}`;
 
   if(list.length === 0){
     el.innerHTML = '<div class="empty-state">Seznam je pr\u00e1zdn\u00fd. V receptu ozna\u010d suroviny, kter\u00e9 pot\u0159ebuje\u0161 koupit, nebo si polo\u017eku p\u0159idej r\u016f\u010dn\u011b n\u00ed\u017ee.</div>' + addBox + hodinyBox();
