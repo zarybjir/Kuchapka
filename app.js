@@ -2053,6 +2053,11 @@ function escapeHtml(str){
 
   recipes = loaded;
   renderList();
+  // v Android aplikaci ukázat i její verzi, ať je poznat, co je nainstalované
+  try{
+    const v = window.KuchapkaAndroid && window.KuchapkaAndroid.appVersion && window.KuchapkaAndroid.appVersion();
+    if(v) document.getElementById('build-info').textContent += ' · aplikace ' + v;
+  }catch(e){}
   hodinyNative(hodinyTopic());
   pollHodiny();
   setTimeout(updateDiag, 2500);

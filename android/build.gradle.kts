@@ -28,8 +28,8 @@ android {
         applicationId = "cz.kuchapka.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 5
-        versionName = "1.4"
+        versionCode = 6
+        versionName = "1.5"
     }
 
     // Stejný stálý klíč jako panel (GitHub secret PANEL_KEYSTORE_B64), aby šly aktualizace.

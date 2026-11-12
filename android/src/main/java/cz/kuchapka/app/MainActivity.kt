@@ -84,7 +84,6 @@ class MainActivity : Activity() {
             ) { handleBack() }
         }
         if (savedInstanceState == null) takeShare(intent)
-        checkUpdate()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -128,6 +127,8 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         web.onResume()
+        // Aktualizaci hlídat i při návratu z pozadí (aplikace se Zpět neukončuje), nejvýš jednou za hodinu.
+        if (System.currentTimeMillis() - lastUpdateCheck > 3_600_000L) checkUpdate()
         web.evaluateJavascript("typeof pollHodiny==='function'&&pollHodiny()", null)
     }
 
@@ -156,7 +157,13 @@ class MainActivity : Activity() {
     }
 
     /** Nová verze na GitHubu → nabídnout stažení. */
+    private var lastUpdateCheck = 0L
+    private var updateDialogShown = false
+
+    fun versionName(): String = try { packageManager.getPackageInfo(packageName, 0).versionName ?: "" } catch (e: Exception) { "" }
+
     private fun checkUpdate() {
+        lastUpdateCheck = System.currentTimeMillis()
         Thread {
             try {
                 val c = URL(UPDATE_INFO).openConnection() as HttpURLConnection
@@ -167,8 +174,10 @@ class MainActivity : Activity() {
                     if (Build.VERSION.SDK_INT >= 28) it.longVersionCode.toInt() else @Suppress("DEPRECATION") it.versionCode
                 }
                 if (latest > mine) runOnUiThread {
-                    if (isFinishing) return@runOnUiThread
+                    if (isFinishing || updateDialogShown) return@runOnUiThread
+                    updateDialogShown = true
                     AlertDialog.Builder(this)
+                        .setOnDismissListener { updateDialogShown = false }
                         .setTitle("Nová verze Kuchapky")
                         .setMessage("Je k dispozici novější verze aplikace. Recepty zůstanou zachované.")
                         .setPositiveButton("Stáhnout") { _, _ ->
@@ -178,7 +187,8 @@ class MainActivity : Activity() {
                         .show()
                 }
             } catch (e: Exception) {
-                // bez internetu nic
+                // bez internetu nic — zkusit znovu při příštím návratu do aplikace
+                lastUpdateCheck = 0L
             }
         }.start()
     }

@@ -17,6 +17,10 @@ class Bridge(private val act: MainActivity) {
     @JavascriptInterface
     fun keepScreenOn(on: Boolean) = act.keepScreenOn(on)
 
+    /** Verze Android aplikace (web ji ukazuje vedle čísla sestavení). */
+    @JavascriptInterface
+    fun appVersion(): String = act.versionName()
+
     @JavascriptInterface
     fun share(text: String) {
         val i = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text)
